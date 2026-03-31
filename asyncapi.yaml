@@ -63,7 +63,7 @@ operations:
       and forwards it to the recipient. The client should use client_message_id for idempotency and
       local message correlation.
     messages:
-      - $ref: '#/components/messages/SendMessage'
+      - $ref: '#/channels/ws/messages/sendMessage'
 
   sendReadReceipt:
     action: send
@@ -74,7 +74,7 @@ operations:
       Client notifies the server that all messages in a chat up to last_read_message_id have been read.
       The server forwards this to the other participant.
     messages:
-      - $ref: '#/components/messages/ReadReceiptOutbound'
+      - $ref: '#/channels/ws/messages/readReceiptOutbound'
 
   sendTypingStart:
     action: send
@@ -82,7 +82,7 @@ operations:
       $ref: '#/channels/ws'
     summary: Notify that the user started typing
     messages:
-      - $ref: '#/components/messages/TypingStart'
+      - $ref: '#/channels/ws/messages/typingStart'
 
   sendTypingStop:
     action: send
@@ -90,7 +90,7 @@ operations:
       $ref: '#/channels/ws'
     summary: Notify that the user stopped typing
     messages:
-      - $ref: '#/components/messages/TypingStop'
+      - $ref: '#/channels/ws/messages/typingStop'
 
   sendPresenceUpdate:
     action: send
@@ -98,7 +98,7 @@ operations:
       $ref: '#/channels/ws'
     summary: Update the user's online/away status
     messages:
-      - $ref: '#/components/messages/PresenceUpdateOutbound'
+      - $ref: '#/channels/ws/messages/presenceUpdateOutbound'
 
   # ── Server → Client ────────────────────────────────────
   receiveNewMessage:
@@ -110,7 +110,7 @@ operations:
       Server delivers an encrypted message from another user. The client decrypts
       locally using the established Double Ratchet session.
     messages:
-      - $ref: '#/components/messages/NewMessage'
+      - $ref: '#/channels/ws/messages/newMessage'
 
   receiveDeliveryReceipt:
     action: receive
@@ -121,7 +121,7 @@ operations:
       Server confirms the recipient's device received the message.
       This does NOT mean the message was read.
     messages:
-      - $ref: '#/components/messages/DeliveryReceipt'
+      - $ref: '#/channels/ws/messages/deliveryReceipt'
 
   receiveReadReceipt:
     action: receive
@@ -129,7 +129,7 @@ operations:
       $ref: '#/channels/ws'
     summary: Receive notification that messages were read
     messages:
-      - $ref: '#/components/messages/ReadReceiptInbound'
+      - $ref: '#/channels/ws/messages/readReceiptInbound'
 
   receiveTypingUpdate:
     action: receive
@@ -137,7 +137,7 @@ operations:
       $ref: '#/channels/ws'
     summary: Receive typing indicator from another user
     messages:
-      - $ref: '#/components/messages/TypingUpdate'
+      - $ref: '#/channels/ws/messages/typingUpdate'
 
   receivePresenceUpdate:
     action: receive
@@ -145,7 +145,7 @@ operations:
       $ref: '#/channels/ws'
     summary: Receive online/offline status change of a contact
     messages:
-      - $ref: '#/components/messages/PresenceUpdateInbound'
+      - $ref: '#/channels/ws/messages/presenceUpdateInbound'
 
   receiveSessionConflict:
     action: receive
@@ -156,7 +156,7 @@ operations:
       Sent when a new device connects using the same credentials. The client can
       use this to prompt the user or disconnect gracefully.
     messages:
-      - $ref: '#/components/messages/SessionConflict'
+      - $ref: '#/channels/ws/messages/sessionConflict'
 
 components:
   messages:
