@@ -3,7 +3,7 @@ info:
   title: Our Tango
   description: |
     For my Elizabeth <3!
-    REST API for an end-to-end encrypted messaging application.
+    REST API for a simple messaging application.
     Real-time messaging uses WebSocket at `ws(s)://host/ws?token=<jwt>`.
   version: 1.0.0
 
@@ -15,26 +15,18 @@ servers:
 
 tags:
   - name: Auth
-    description: Registration, login, and token management
+    description: Registration and login
   - name: Users
-    description: User profiles and contacts
-  - name: Keys
-    description: E2E encryption key management (Signal Protocol)
-  - name: Chats
-    description: Conversation and message history
-  - name: Media
-    description: Encrypted file upload/download
-  - name: Notifications
-    description: Push notification device registration and preferences
-  - name: WebSocket
-    description: Real-time messaging events (documented for reference)
+    description: Contacts and message history
 
 paths:
   # ── Auth ──────────────────────────────────────────────
   /api/auth/register:
     post:
+      operationId: register
       tags: [Auth]
       summary: Register a new user
+      security: []
       requestBody:
         required: true
         content:
@@ -57,8 +49,10 @@ paths:
 
   /api/auth/login:
     post:
+      operationId: login
       tags: [Auth]
-      summary: Login and receive JWT tokens
+      summary: Login and receive a JWT access token
+      security: []
       requestBody:
         required: true
         content:
@@ -71,7 +65,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthTokenResponse'
+                $ref: '#/components/schemas/LoginResponse'
         '401':
           description: Invalid credentials
           content:
@@ -79,340 +73,62 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
 
-  /api/auth/refresh:
-    post:
-      tags: [Auth]
-      summary: Refresh an expired access token
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RefreshTokenRequest'
-      responses:
-        '200':
-          description: Token refreshed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthTokenResponse'
-        '401':
-          description: Invalid or expired refresh token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-
-  /api/auth/logout:
-    post:
-      tags: [Auth]
-      summary: Invalidate refresh token
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Logged out
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MessageResponse'
-
-  /api/auth/account:
-    delete:
-      tags: [Auth]
-      summary: Delete account and all associated data
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Account deleted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MessageResponse'
-
   # ── Users ─────────────────────────────────────────────
-  /api/users/me:
+  /api/users/me/contacts:
     get:
+      operationId: getContacts
       tags: [Users]
-      summary: Get own profile
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Current user profile
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UserProfileResponse'
-    put:
-      tags: [Users]
-      summary: Update own profile
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateProfileRequest'
-      responses:
-        '200':
-          description: Profile updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UserProfileResponse'
-
-  /api/users/search:
-    get:
-      tags: [Users]
-      summary: Search users by username
+      summary: Get contacts with latest message from each
+      description: |
+        Returns a paginated list of the current user's contacts, each with the
+        most recent message exchanged. Ordered by latest message descending.
+        Use the `before` cursor (the `created_at` of the last item on the current page)
+        to fetch the next page.
       security:
         - bearerAuth: []
       parameters:
-        - name: q
+        - name: before
           in: query
-          required: true
+          description: Return contacts whose latest message is before this timestamp (ISO 8601). Omit for the first page.
           schema:
             type: string
-          description: Search query
+            format: date-time
         - name: limit
           in: query
           schema:
             type: integer
             default: 20
             maximum: 100
-        - name: offset
-          in: query
-          schema:
-            type: integer
-            default: 0
       responses:
         '200':
-          description: Search results
+          description: Paginated contact list
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SearchUsersResponse'
+                $ref: '#/components/schemas/ContactsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
 
-  /api/users/{userId}:
+  /api/chats/{userId}/messages:
     get:
+      operationId: getMessageHistory
       tags: [Users]
-      summary: Get user public profile
+      summary: Get message history with a user
+      description: |
+        Returns paginated message history between the authenticated user and the
+        specified user, ordered newest first. Use the `before` cursor (the `created_at`
+        of the oldest message on the current page) to fetch older messages.
       security:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/userId'
-      responses:
-        '200':
-          description: User profile
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UserProfileResponse'
-        '404':
-          description: User not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-
-  /api/users/{userId}/public-key:
-    get:
-      tags: [Users]
-      summary: Get user's identity public key
-      security:
-        - bearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/userId'
-      responses:
-        '200':
-          description: Public key
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PublicKeyResponse'
-        '404':
-          description: User not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-
-  /api/contacts:
-    get:
-      tags: [Users]
-      summary: List contacts
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Contact list
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ContactListResponse'
-    post:
-      tags: [Users]
-      summary: Add a contact
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AddContactRequest'
-      responses:
-        '201':
-          description: Contact added
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ContactResponse'
-        '409':
-          description: Contact already exists
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-
-  /api/contacts/{contactId}:
-    delete:
-      tags: [Users]
-      summary: Remove a contact
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: contactId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Contact removed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MessageResponse'
-        '404':
-          description: Contact not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-
-  # ── Keys ──────────────────────────────────────────────
-  /api/keys/bundle:
-    post:
-      tags: [Keys]
-      summary: Upload key bundle (identity + signed pre-key + one-time pre-keys)
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UploadKeyBundleRequest'
-      responses:
-        '200':
-          description: Key bundle uploaded
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MessageResponse'
-
-  /api/keys/bundle/{userId}:
-    get:
-      tags: [Keys]
-      summary: Fetch a user's key bundle to initiate an encrypted session
-      security:
-        - bearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/userId'
-      responses:
-        '200':
-          description: Key bundle (one-time pre-key consumed if available)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KeyBundleResponse'
-        '404':
-          description: No key bundle found for user
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-
-  /api/keys/pre-keys:
-    post:
-      tags: [Keys]
-      summary: Replenish one-time pre-keys
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReplenishPreKeysRequest'
-      responses:
-        '200':
-          description: Pre-keys added
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PreKeyCountResponse'
-
-  /api/keys/pre-keys/count:
-    get:
-      tags: [Keys]
-      summary: Check remaining one-time pre-key count
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Remaining count
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PreKeyCountResponse'
-
-  # ── Chats ─────────────────────────────────────────────
-  /api/chats:
-    get:
-      tags: [Chats]
-      summary: List all conversations
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Conversation list
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ChatListResponse'
-
-  /api/chats/{chatId}/messages:
-    get:
-      tags: [Chats]
-      summary: Get paginated message history (encrypted)
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: chatId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
         - name: before
           in: query
-          description: Return messages before this timestamp
+          description: Return messages before this timestamp (ISO 8601). Omit for the most recent messages.
           schema:
             type: string
             format: date-time
@@ -429,221 +145,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MessageHistoryResponse'
-
-  /api/chats/{chatId}/messages/{messageId}:
-    delete:
-      tags: [Chats]
-      summary: Delete a message
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: chatId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: messageId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Message deleted
+        '401':
+          description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MessageResponse'
+                $ref: '#/components/schemas/ApiError'
         '404':
-          description: Message not found
+          description: User not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-
-  /api/chats/{chatId}:
-    delete:
-      tags: [Chats]
-      summary: Delete entire conversation
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: chatId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Conversation deleted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MessageResponse'
-
-  # ── Media ─────────────────────────────────────────────
-  /api/media/upload:
-    post:
-      tags: [Media]
-      summary: Upload an encrypted file
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required:
-                - file
-                - file_name
-                - content_type
-              properties:
-                file:
-                  type: string
-                  format: binary
-                  description: Encrypted file bytes
-                file_name:
-                  type: string
-                content_type:
-                  type: string
-      responses:
-        '201':
-          description: File uploaded
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MediaUploadResponse'
-        '413':
-          description: File too large
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-
-  /api/media/{fileId}:
-    get:
-      tags: [Media]
-      summary: Download an encrypted file
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: fileId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Encrypted file bytes
-          content:
-            application/octet-stream:
-              schema:
-                type: string
-                format: binary
-        '404':
-          description: File not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-    delete:
-      tags: [Media]
-      summary: Delete an uploaded file
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: fileId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: File deleted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MessageResponse'
-
-  # ── Notifications ─────────────────────────────────────
-  /api/devices:
-    post:
-      tags: [Notifications]
-      summary: Register a device push token
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RegisterDeviceRequest'
-      responses:
-        '201':
-          description: Device registered
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DeviceResponse'
-
-  /api/devices/{deviceId}:
-    delete:
-      tags: [Notifications]
-      summary: Unregister a device
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: deviceId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Device removed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MessageResponse'
-
-  /api/notifications/settings:
-    get:
-      tags: [Notifications]
-      summary: Get notification preferences
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Current settings
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/NotificationSettingsResponse'
-    put:
-      tags: [Notifications]
-      summary: Update notification preferences
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/NotificationSettingsRequest'
-      responses:
-        '200':
-          description: Settings updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/NotificationSettingsResponse'
 
 components:
   securitySchemes:
@@ -665,7 +178,7 @@ components:
     # ── Auth ────────────────────────────────────────────
     RegisterRequest:
       type: object
-      required: [username, password, identity_public_key]
+      required: [username, password]
       properties:
         username:
           type: string
@@ -674,12 +187,18 @@ components:
         password:
           type: string
           minLength: 8
-        display_name:
+
+    RegisterResponse:
+      type: object
+      properties:
+        user_id:
           type: string
-          maxLength: 64
-        identity_public_key:
+          format: uuid
+        username:
           type: string
-          description: Base64-encoded public key for E2E encryption
+        access_token:
+          type: string
+          description: JWT access token
 
     LoginRequest:
       type: object
@@ -690,25 +209,7 @@ components:
         password:
           type: string
 
-    RefreshTokenRequest:
-      type: object
-      required: [refresh_token]
-      properties:
-        refresh_token:
-          type: string
-
-    AuthTokenResponse:
-      type: object
-      properties:
-        access_token:
-          type: string
-        refresh_token:
-          type: string
-        expires_in:
-          type: integer
-          description: Access token TTL in seconds
-
-    RegisterResponse:
+    LoginResponse:
       type: object
       properties:
         user_id:
@@ -716,13 +217,7 @@ components:
           format: uuid
         username:
           type: string
-        tokens:
-          $ref: '#/components/schemas/AuthTokenResponse'
-
-    MessageResponse:
-      type: object
-      properties:
-        message:
+        access_token:
           type: string
 
     ApiError:
@@ -738,184 +233,43 @@ components:
           nullable: true
 
     # ── Users ───────────────────────────────────────────
-    UpdateProfileRequest:
+    LatestMessageSummary:
       type: object
       properties:
-        display_name:
+        content:
           type: string
-          maxLength: 64
-        avatar_url:
+        created_at:
           type: string
-          format: uri
-        bio:
-          type: string
-          maxLength: 256
+          format: date-time
+        is_mine:
+          type: boolean
+          description: True if the authenticated user sent this message
 
-    UserProfileResponse:
+    ContactSummary:
       type: object
       properties:
-        id:
+        user_id:
           type: string
           format: uuid
         username:
           type: string
-        display_name:
-          type: string
+        latest_message:
+          type: object
           nullable: true
-        avatar_url:
-          type: string
-          nullable: true
-        bio:
-          type: string
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
+          allOf:
+            - $ref: '#/components/schemas/LatestMessageSummary'
 
-    PublicKeyResponse:
-      type: object
-      properties:
-        user_id:
-          type: string
-          format: uuid
-        identity_public_key:
-          type: string
-
-    AddContactRequest:
-      type: object
-      required: [user_id]
-      properties:
-        user_id:
-          type: string
-          format: uuid
-
-    ContactResponse:
-      type: object
-      properties:
-        contact_id:
-          type: string
-          format: uuid
-        user:
-          $ref: '#/components/schemas/UserProfileResponse'
-        added_at:
-          type: string
-          format: date-time
-
-    ContactListResponse:
+    ContactsResponse:
       type: object
       properties:
         contacts:
           type: array
           items:
-            $ref: '#/components/schemas/ContactResponse'
+            $ref: '#/components/schemas/ContactSummary'
+        has_more:
+          type: boolean
 
-    SearchUsersResponse:
-      type: object
-      properties:
-        users:
-          type: array
-          items:
-            $ref: '#/components/schemas/UserProfileResponse'
-        total:
-          type: integer
-
-    # ── Keys ────────────────────────────────────────────
-    SignedPreKeyData:
-      type: object
-      required: [key_id, public_key, signature]
-      properties:
-        key_id:
-          type: integer
-        public_key:
-          type: string
-          description: Base64-encoded
-        signature:
-          type: string
-          description: Base64-encoded
-
-    PreKeyData:
-      type: object
-      required: [key_id, public_key]
-      properties:
-        key_id:
-          type: integer
-        public_key:
-          type: string
-          description: Base64-encoded
-
-    UploadKeyBundleRequest:
-      type: object
-      required: [identity_public_key, signed_pre_key, one_time_pre_keys]
-      properties:
-        identity_public_key:
-          type: string
-        signed_pre_key:
-          $ref: '#/components/schemas/SignedPreKeyData'
-        one_time_pre_keys:
-          type: array
-          items:
-            $ref: '#/components/schemas/PreKeyData'
-
-    KeyBundleResponse:
-      type: object
-      properties:
-        user_id:
-          type: string
-          format: uuid
-        identity_public_key:
-          type: string
-        signed_pre_key:
-          $ref: '#/components/schemas/SignedPreKeyData'
-        one_time_pre_key:
-          nullable: true
-          description: Consumed on fetch. Null if none remaining.
-          allOf:
-            - $ref: '#/components/schemas/PreKeyData'
-
-    ReplenishPreKeysRequest:
-      type: object
-      required: [pre_keys]
-      properties:
-        pre_keys:
-          type: array
-          items:
-            $ref: '#/components/schemas/PreKeyData'
-
-    PreKeyCountResponse:
-      type: object
-      properties:
-        remaining:
-          type: integer
-
-    # ── Chats ───────────────────────────────────────────
-    MessageType:
-      type: string
-      enum: [Text, Image, Video, Audio, File]
-
-    ChatSummary:
-      type: object
-      properties:
-        chat_id:
-          type: string
-          format: uuid
-        participant:
-          $ref: '#/components/schemas/UserProfileResponse'
-        last_message:
-          nullable: true
-          allOf:
-            - $ref: '#/components/schemas/MessageSummary'
-        unread_count:
-          type: integer
-
-    ChatListResponse:
-      type: object
-      properties:
-        chats:
-          type: array
-          items:
-            $ref: '#/components/schemas/ChatSummary'
-
-    MessageSummary:
+    Message:
       type: object
       properties:
         message_id:
@@ -924,11 +278,8 @@ components:
         sender_id:
           type: string
           format: uuid
-        ciphertext:
+        content:
           type: string
-          description: Base64-encoded encrypted payload
-        message_type:
-          $ref: '#/components/schemas/MessageType'
         created_at:
           type: string
           format: date-time
@@ -939,205 +290,6 @@ components:
         messages:
           type: array
           items:
-            $ref: '#/components/schemas/MessageSummary'
+            $ref: '#/components/schemas/Message'
         has_more:
           type: boolean
-
-    # ── Media ───────────────────────────────────────────
-    MediaUploadResponse:
-      type: object
-      properties:
-        file_id:
-          type: string
-          format: uuid
-        size_bytes:
-          type: integer
-        created_at:
-          type: string
-          format: date-time
-
-    MediaMetadataResponse:
-      type: object
-      properties:
-        file_id:
-          type: string
-          format: uuid
-        file_name:
-          type: string
-        content_type:
-          type: string
-        size_bytes:
-          type: integer
-        created_at:
-          type: string
-          format: date-time
-
-    # ── Notifications ───────────────────────────────────
-    Platform:
-      type: string
-      enum: [Ios, Android, Web]
-
-    RegisterDeviceRequest:
-      type: object
-      required: [platform, push_token]
-      properties:
-        platform:
-          $ref: '#/components/schemas/Platform'
-        push_token:
-          type: string
-
-    DeviceResponse:
-      type: object
-      properties:
-        device_id:
-          type: string
-          format: uuid
-        platform:
-          $ref: '#/components/schemas/Platform'
-        created_at:
-          type: string
-          format: date-time
-
-    NotificationSettingsRequest:
-      type: object
-      properties:
-        messages_enabled:
-          type: boolean
-        sound_enabled:
-          type: boolean
-        preview_enabled:
-          type: boolean
-
-    NotificationSettingsResponse:
-      type: object
-      properties:
-        messages_enabled:
-          type: boolean
-        sound_enabled:
-          type: boolean
-        preview_enabled:
-          type: boolean
-
-    # ── WebSocket Events (for documentation) ────────────
-    WsEnvelope:
-      type: object
-      description: "WebSocket message wrapper. Connect at ws(s)://host/ws?token=<jwt>"
-      required: [event, payload]
-      properties:
-        event:
-          type: string
-          description: "Event type: message:send, message:new, message:read, message:delivered, typing:start, typing:stop, presence:update, session:conflict"
-        payload:
-          type: object
-          description: Event-specific payload (see individual event schemas)
-        request_id:
-          type: string
-          nullable: true
-          description: Client-generated ID for ack correlation
-
-    SendMessagePayload:
-      type: object
-      description: "Client -> Server: message:send"
-      required: [recipient_id, ciphertext, message_type, client_message_id]
-      properties:
-        recipient_id:
-          type: string
-          format: uuid
-        ciphertext:
-          type: string
-        message_type:
-          $ref: '#/components/schemas/MessageType'
-        media_id:
-          type: string
-          format: uuid
-          nullable: true
-        client_message_id:
-          type: string
-          description: Client-generated idempotency key
-
-    NewMessagePayload:
-      type: object
-      description: "Server -> Client: message:new"
-      properties:
-        message_id:
-          type: string
-          format: uuid
-        chat_id:
-          type: string
-          format: uuid
-        sender_id:
-          type: string
-          format: uuid
-        ciphertext:
-          type: string
-        message_type:
-          $ref: '#/components/schemas/MessageType'
-        media_id:
-          type: string
-          format: uuid
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-        client_message_id:
-          type: string
-
-    DeliveryReceiptPayload:
-      type: object
-      description: "Server -> Client: message:delivered"
-      properties:
-        message_id:
-          type: string
-          format: uuid
-        chat_id:
-          type: string
-          format: uuid
-        delivered_at:
-          type: string
-          format: date-time
-
-    ReadReceiptPayload:
-      type: object
-      description: "Bidirectional: message:read"
-      required: [chat_id, last_read_message_id]
-      properties:
-        chat_id:
-          type: string
-          format: uuid
-        last_read_message_id:
-          type: string
-          format: uuid
-
-    TypingPayload:
-      type: object
-      description: "Bidirectional: typing:start / typing:stop"
-      required: [chat_id, user_id]
-      properties:
-        chat_id:
-          type: string
-          format: uuid
-        user_id:
-          type: string
-          format: uuid
-
-    PresencePayload:
-      type: object
-      description: "Bidirectional: presence:update"
-      required: [user_id, status]
-      properties:
-        user_id:
-          type: string
-          format: uuid
-        status:
-          type: string
-          enum: [Online, Away, Offline]
-
-    SessionConflictPayload:
-      type: object
-      description: "Server -> Client: session:conflict"
-      properties:
-        device_info:
-          type: string
-        connected_at:
-          type: string
-          format: date-time

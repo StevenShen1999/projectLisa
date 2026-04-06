@@ -1,13 +1,33 @@
 # Our Tango
 
-API documentation for the Our Tango E2E encrypted messaging app.
+API documentation for the Our Tango messaging app.
 
 ## Documentation Files
 
 | File | Covers | Spec |
 |------|--------|------|
-| `openapi.yaml` | REST API (Auth, Users, Keys, Chats, Media, Notifications) | OpenAPI 3.0.3 |
-| `asyncapi.yaml` | WebSocket events (messaging, typing, presence, receipts) | AsyncAPI 3.0.0 |
+| `openapi.yaml` | REST API (Auth, Contacts, Message History) | OpenAPI 3.0.3 |
+| `asyncapi.yaml` | WebSocket events (send/receive messages) | AsyncAPI 3.0.0 |
+
+## API Overview
+
+### REST Endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/api/auth/register` | — | Register a new user |
+| `POST` | `/api/auth/login` | — | Login, returns JWT |
+| `GET` | `/api/users/me/contacts` | JWT | Paginated contacts + latest message |
+| `GET` | `/api/chats/{userId}/messages` | JWT | Paginated message history with a user |
+
+### WebSocket
+
+Connect at `ws(s)://host/ws?token=<jwt>`.
+
+| Direction | Event | Description |
+|-----------|-------|-------------|
+| Client → Server | `message:send` | Send a message to a user |
+| Server → Client | `message:new` | Receive an incoming message |
 
 ## Viewing the Docs
 
@@ -23,7 +43,6 @@ Then open http://localhost:8081.
 ```bash
 npx @redocly/cli preview-docs openapi.yaml
 ```
-Opens a browser at http://localhost:8080 with a rendered doc page.
 
 **Option 3 — VS Code**
 Install the [Swagger Viewer](https://marketplace.visualstudio.com/items?itemName=Arjun.swagger-viewer) or [OpenAPI (Swagger) Editor](https://marketplace.visualstudio.com/items?itemName=42Crunch.vscode-openapi) extension, then open `openapi.yaml` and preview.
@@ -37,7 +56,6 @@ Go to https://studio.asyncapi.com and paste the contents of `asyncapi.yaml`.
 ```bash
 npx -y @asyncapi/cli start studio
 ```
-Opens AsyncAPI Studio locally in your browser.
 
 **Option 3 — Generate static HTML**
 ```bash
@@ -64,10 +82,7 @@ Use the OpenAPI spec to generate a typed client:
 ```bash
 # TypeScript (e.g. React, Vue, Svelte)
 npx openapi-typescript openapi.yaml -o src/api/schema.d.ts
-
-# Or generate a full client with openapi-fetch
 npm install openapi-fetch
-npx openapi-typescript openapi.yaml -o src/api/schema.d.ts
 ```
 
 Then in your frontend code:
@@ -77,45 +92,33 @@ import type { paths } from './api/schema';
 
 const api = createClient<paths>({ baseUrl: 'http://localhost:8080' });
 
-// Fully typed — autocomplete on paths, params, and responses
-const { data, error } = await api.POST('/api/auth/login', {
+// Login
+const { data } = await api.POST('/api/auth/login', {
   body: { username: 'alice', password: 'securepass' },
 });
+const token = data?.access_token;
 ```
 
 ### WebSocket
 
-Use the AsyncAPI spec to generate typed message handlers:
-
-```bash
-npx -y @asyncapi/cli generate fromTemplate asyncapi.yaml @asyncapi/typescript-template -o src/api/ws
-```
-
-Or manually connect using the envelope format:
 ```ts
 const ws = new WebSocket(`wss://api.example.com/ws?token=${accessToken}`);
 
-// Send
+// Send a message
 ws.send(JSON.stringify({
   event: 'message:send',
   payload: {
-    recipient_id: '...',
-    ciphertext: '...',
-    message_type: 'Text',
+    recipient_id: '00000000-0000-0000-0000-000000000001',
+    content: 'Hey!',
     client_message_id: crypto.randomUUID(),
   },
-  request_id: crypto.randomUUID(),
 }));
 
-// Receive
+// Receive messages
 ws.onmessage = (e) => {
   const { event, payload } = JSON.parse(e.data);
-  switch (event) {
-    case 'message:new':     // handle incoming message
-    case 'message:delivered': // handle delivery receipt
-    case 'typing:update':   // handle typing indicator
-    case 'presence:update': // handle online/offline
-    // ...
+  if (event === 'message:new') {
+    console.log(`${payload.sender_id}: ${payload.content}`);
   }
 };
 ```

@@ -3,8 +3,8 @@ info:
   title: Our Tango
   description: |
     For my Elizabeth!
-    Real-time WebSocket API for the E2E encrypted messaging application.
-    All messages are wrapped in a WsEnvelope with an event type, payload, and optional request_id for ack correlation.
+    Real-time WebSocket API for the messaging application.
+    All messages are wrapped in a WsEnvelope with an event type and payload.
     Connect at `ws(s)://host/ws?token=<jwt>`.
   version: 1.0.0
 
@@ -32,24 +32,6 @@ channels:
         $ref: '#/components/messages/SendMessage'
       newMessage:
         $ref: '#/components/messages/NewMessage'
-      deliveryReceipt:
-        $ref: '#/components/messages/DeliveryReceipt'
-      readReceiptOutbound:
-        $ref: '#/components/messages/ReadReceiptOutbound'
-      readReceiptInbound:
-        $ref: '#/components/messages/ReadReceiptInbound'
-      typingStart:
-        $ref: '#/components/messages/TypingStart'
-      typingStop:
-        $ref: '#/components/messages/TypingStop'
-      typingUpdate:
-        $ref: '#/components/messages/TypingUpdate'
-      presenceUpdateOutbound:
-        $ref: '#/components/messages/PresenceUpdateOutbound'
-      presenceUpdateInbound:
-        $ref: '#/components/messages/PresenceUpdateInbound'
-      sessionConflict:
-        $ref: '#/components/messages/SessionConflict'
 
 operations:
   # ── Client → Server ────────────────────────────────────
@@ -57,106 +39,24 @@ operations:
     action: send
     channel:
       $ref: '#/channels/ws'
-    summary: Send an encrypted message to another user
+    summary: Send a message to another user
     description: |
-      Client sends an encrypted message. The server assigns a message_id, persists the ciphertext,
-      and forwards it to the recipient. The client should use client_message_id for idempotency and
-      local message correlation.
+      Client sends a plain-text message. The server assigns a message_id, persists it,
+      and forwards it to the recipient. Use client_message_id for local message correlation.
     messages:
       - $ref: '#/channels/ws/messages/sendMessage'
-
-  sendReadReceipt:
-    action: send
-    channel:
-      $ref: '#/channels/ws'
-    summary: Mark messages as read up to a given message
-    description: |
-      Client notifies the server that all messages in a chat up to last_read_message_id have been read.
-      The server forwards this to the other participant.
-    messages:
-      - $ref: '#/channels/ws/messages/readReceiptOutbound'
-
-  sendTypingStart:
-    action: send
-    channel:
-      $ref: '#/channels/ws'
-    summary: Notify that the user started typing
-    messages:
-      - $ref: '#/channels/ws/messages/typingStart'
-
-  sendTypingStop:
-    action: send
-    channel:
-      $ref: '#/channels/ws'
-    summary: Notify that the user stopped typing
-    messages:
-      - $ref: '#/channels/ws/messages/typingStop'
-
-  sendPresenceUpdate:
-    action: send
-    channel:
-      $ref: '#/channels/ws'
-    summary: Update the user's online/away status
-    messages:
-      - $ref: '#/channels/ws/messages/presenceUpdateOutbound'
 
   # ── Server → Client ────────────────────────────────────
   receiveNewMessage:
     action: receive
     channel:
       $ref: '#/channels/ws'
-    summary: Receive an incoming encrypted message
+    summary: Receive an incoming message from another user
     description: |
-      Server delivers an encrypted message from another user. The client decrypts
-      locally using the established Double Ratchet session.
+      Server delivers a message from another user. The client_message_id is echoed
+      back to the original sender for correlation with their local pending message.
     messages:
       - $ref: '#/channels/ws/messages/newMessage'
-
-  receiveDeliveryReceipt:
-    action: receive
-    channel:
-      $ref: '#/channels/ws'
-    summary: Receive confirmation that a sent message was delivered
-    description: |
-      Server confirms the recipient's device received the message.
-      This does NOT mean the message was read.
-    messages:
-      - $ref: '#/channels/ws/messages/deliveryReceipt'
-
-  receiveReadReceipt:
-    action: receive
-    channel:
-      $ref: '#/channels/ws'
-    summary: Receive notification that messages were read
-    messages:
-      - $ref: '#/channels/ws/messages/readReceiptInbound'
-
-  receiveTypingUpdate:
-    action: receive
-    channel:
-      $ref: '#/channels/ws'
-    summary: Receive typing indicator from another user
-    messages:
-      - $ref: '#/channels/ws/messages/typingUpdate'
-
-  receivePresenceUpdate:
-    action: receive
-    channel:
-      $ref: '#/channels/ws'
-    summary: Receive online/offline status change of a contact
-    messages:
-      - $ref: '#/channels/ws/messages/presenceUpdateInbound'
-
-  receiveSessionConflict:
-    action: receive
-    channel:
-      $ref: '#/channels/ws'
-    summary: Receive notification that another device connected with the same account
-    description: |
-      Sent when a new device connects using the same credentials. The client can
-      use this to prompt the user or disconnect gracefully.
-    messages:
-      - $ref: '#/channels/ws/messages/sessionConflict'
 
 components:
   messages:
@@ -164,91 +64,19 @@ components:
     SendMessage:
       name: message:send
       title: Send Message
-      summary: Send an encrypted message to a recipient
+      summary: Send a plain-text message to a recipient
       contentType: application/json
       payload:
         $ref: '#/components/schemas/SendMessageEnvelope'
-
-    ReadReceiptOutbound:
-      name: message:read
-      title: Send Read Receipt
-      summary: Mark messages as read
-      contentType: application/json
-      payload:
-        $ref: '#/components/schemas/ReadReceiptEnvelope'
-
-    TypingStart:
-      name: typing:start
-      title: Typing Start
-      summary: User started typing
-      contentType: application/json
-      payload:
-        $ref: '#/components/schemas/TypingEnvelope'
-
-    TypingStop:
-      name: typing:stop
-      title: Typing Stop
-      summary: User stopped typing
-      contentType: application/json
-      payload:
-        $ref: '#/components/schemas/TypingEnvelope'
-
-    PresenceUpdateOutbound:
-      name: presence:update
-      title: Send Presence Update
-      summary: Update own online status
-      contentType: application/json
-      payload:
-        $ref: '#/components/schemas/PresenceEnvelope'
 
     # ── Server → Client ──────────────────────────────────
     NewMessage:
       name: message:new
       title: New Message
-      summary: Incoming encrypted message from another user
+      summary: Incoming message from another user
       contentType: application/json
       payload:
         $ref: '#/components/schemas/NewMessageEnvelope'
-
-    DeliveryReceipt:
-      name: message:delivered
-      title: Delivery Receipt
-      summary: Confirmation that a message was delivered to recipient's device
-      contentType: application/json
-      payload:
-        $ref: '#/components/schemas/DeliveryReceiptEnvelope'
-
-    ReadReceiptInbound:
-      name: message:read
-      title: Receive Read Receipt
-      summary: Notification that the recipient read messages
-      contentType: application/json
-      payload:
-        $ref: '#/components/schemas/ReadReceiptEnvelope'
-
-    TypingUpdate:
-      name: typing:update
-      title: Typing Update
-      summary: Another user is typing in a chat
-      contentType: application/json
-      payload:
-        $ref: '#/components/schemas/TypingEnvelope'
-
-    PresenceUpdateInbound:
-      name: presence:update
-      title: Receive Presence Update
-      summary: A contact's online status changed
-      contentType: application/json
-      payload:
-        $ref: '#/components/schemas/PresenceEnvelope'
-
-    SessionConflict:
-      name: session:conflict
-      title: Session Conflict
-      summary: Another device connected with the same account
-      contentType: application/json
-      payload:
-        $ref: '#/components/schemas/SessionConflictEnvelope'
 
   schemas:
     # ── Envelope wrappers ────────────────────────────────
@@ -261,10 +89,6 @@ components:
           const: "message:send"
         payload:
           $ref: '#/components/schemas/SendMessagePayload'
-        request_id:
-          type: string
-          description: Client-generated ID for ack correlation
-          nullable: true
 
     NewMessageEnvelope:
       type: object
@@ -275,192 +99,39 @@ components:
           const: "message:new"
         payload:
           $ref: '#/components/schemas/NewMessagePayload'
-        request_id:
-          type: string
-          nullable: true
-
-    DeliveryReceiptEnvelope:
-      type: object
-      required: [event, payload]
-      properties:
-        event:
-          type: string
-          const: "message:delivered"
-        payload:
-          $ref: '#/components/schemas/DeliveryReceiptPayload'
-        request_id:
-          type: string
-          nullable: true
-
-    ReadReceiptEnvelope:
-      type: object
-      required: [event, payload]
-      properties:
-        event:
-          type: string
-          const: "message:read"
-        payload:
-          $ref: '#/components/schemas/ReadReceiptPayload'
-        request_id:
-          type: string
-          nullable: true
-
-    TypingEnvelope:
-      type: object
-      required: [event, payload]
-      properties:
-        event:
-          type: string
-          enum: ["typing:start", "typing:stop", "typing:update"]
-        payload:
-          $ref: '#/components/schemas/TypingPayload'
-        request_id:
-          type: string
-          nullable: true
-
-    PresenceEnvelope:
-      type: object
-      required: [event, payload]
-      properties:
-        event:
-          type: string
-          const: "presence:update"
-        payload:
-          $ref: '#/components/schemas/PresencePayload'
-        request_id:
-          type: string
-          nullable: true
-
-    SessionConflictEnvelope:
-      type: object
-      required: [event, payload]
-      properties:
-        event:
-          type: string
-          const: "session:conflict"
-        payload:
-          $ref: '#/components/schemas/SessionConflictPayload'
-        request_id:
-          type: string
-          nullable: true
 
     # ── Payloads ─────────────────────────────────────────
     SendMessagePayload:
       type: object
-      required: [recipient_id, ciphertext, message_type, client_message_id]
+      required: [recipient_id, content, client_message_id]
       properties:
         recipient_id:
           type: string
           format: uuid
           description: Target user ID
-        ciphertext:
+        content:
           type: string
-          description: Base64-encoded encrypted message content
-        message_type:
-          $ref: '#/components/schemas/MessageType'
-        media_id:
-          type: string
-          format: uuid
-          nullable: true
-          description: Reference to an uploaded encrypted file (from Media service)
+          description: Plain-text message content
         client_message_id:
           type: string
-          description: Client-generated idempotency key for deduplication and local correlation
+          description: Client-generated ID for local message correlation
 
     NewMessagePayload:
       type: object
-      required: [message_id, chat_id, sender_id, ciphertext, message_type, created_at, client_message_id]
+      required: [message_id, sender_id, content, created_at, client_message_id]
       properties:
         message_id:
           type: string
           format: uuid
           description: Server-assigned message ID
-        chat_id:
-          type: string
-          format: uuid
-          description: Conversation this message belongs to
         sender_id:
           type: string
           format: uuid
-        ciphertext:
+        content:
           type: string
-          description: Base64-encoded encrypted message content
-        message_type:
-          $ref: '#/components/schemas/MessageType'
-        media_id:
-          type: string
-          format: uuid
-          nullable: true
         created_at:
           type: string
           format: date-time
         client_message_id:
           type: string
           description: Echoed from the sender's original request
-
-    DeliveryReceiptPayload:
-      type: object
-      required: [message_id, chat_id, delivered_at]
-      properties:
-        message_id:
-          type: string
-          format: uuid
-        chat_id:
-          type: string
-          format: uuid
-        delivered_at:
-          type: string
-          format: date-time
-
-    ReadReceiptPayload:
-      type: object
-      required: [chat_id, last_read_message_id]
-      properties:
-        chat_id:
-          type: string
-          format: uuid
-        last_read_message_id:
-          type: string
-          format: uuid
-          description: All messages up to and including this ID are marked as read
-
-    TypingPayload:
-      type: object
-      required: [chat_id, user_id]
-      properties:
-        chat_id:
-          type: string
-          format: uuid
-        user_id:
-          type: string
-          format: uuid
-
-    PresencePayload:
-      type: object
-      required: [user_id, status]
-      properties:
-        user_id:
-          type: string
-          format: uuid
-        status:
-          $ref: '#/components/schemas/PresenceStatus'
-
-    SessionConflictPayload:
-      type: object
-      required: [device_info, connected_at]
-      properties:
-        device_info:
-          type: string
-          description: Description of the device that connected (e.g. "iPhone 15, iOS 18")
-        connected_at:
-          type: string
-          format: date-time
-
-    # ── Shared enums ─────────────────────────────────────
-    MessageType:
-      type: string
-      enum: [Text, Image, Video, Audio, File]
-
-    PresenceStatus:
-      type: string
-      enum: [Online, Away, Offline]

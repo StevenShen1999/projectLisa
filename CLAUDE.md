@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Our Tango** — A Rust implementation of an E2E encrypted messaging app. The specs in this repo (`openapi.yaml`, `asyncapi.yaml`) are the source of truth for the API being built.
+**Our Tango** — A Rust implementation of a simple messaging app. The specs in this repo (`openapi.yaml`, `asyncapi.yaml`) are the source of truth for the API being built.
 
 ## Rust Standards
 
@@ -40,8 +40,8 @@ cargo fmt -- --check     # Check formatting without modifying
 
 | File | Covers | Spec |
 |------|--------|------|
-| `openapi.yaml` | REST API (Auth, Users, Keys, Chats, Media, Notifications) | OpenAPI 3.0.3 |
-| `asyncapi.yaml` | WebSocket events (messaging, typing, presence, receipts) | AsyncAPI 3.0.0 |
+| `openapi.yaml` | REST API (Auth, Contacts, Message History) | OpenAPI 3.0.3 |
+| `asyncapi.yaml` | WebSocket events (send/receive messages) | AsyncAPI 3.0.0 |
 
 ## Validation
 
@@ -68,39 +68,27 @@ npx -y @asyncapi/cli generate fromTemplate asyncapi.yaml @asyncapi/html-template
 
 ## Architecture
 
-### E2E Encryption Model (Signal Protocol)
+### REST API
 
-- On registration, clients submit an `identity_public_key` (`POST /api/auth/register`).
-- Before messaging, the sender fetches the recipient's key bundle (`GET /api/keys/bundle/{userId}`), which includes the identity key, a signed pre-key, and an optional one-time pre-key (consumed on fetch).
-- The client establishes a Double Ratchet session locally. All message content (`ciphertext`) is Base64-encoded and opaque to the server.
-- Clients must replenish one-time pre-keys proactively (`POST /api/keys/pre-keys`) when the count drops low (`GET /api/keys/pre-keys/count`).
-
-### REST API Domain Groups
-
-- **Auth** — register/login/refresh/logout + account deletion; uses JWT bearer tokens.
-- **Users** — profile CRUD, user search, contacts list.
-- **Keys** — key bundle upload/fetch, pre-key replenishment.
-- **Chats** — conversation list, paginated encrypted message history (`before` cursor), message deletion.
-- **Media** — encrypted file upload (multipart) and download (octet-stream).
-- **Notifications** — push device registration and per-user preferences.
+- **Auth** — register + login; both return a JWT access token.
+- **Users** — paginated contacts list with latest message per contact; paginated message history with a specific user.
 
 ### WebSocket Transport
 
 Connect at `ws(s)://host/ws?token=<jwt>`. All frames use a `WsEnvelope` wrapper:
 
 ```json
-{ "event": "<event-type>", "payload": { ... }, "request_id": "<optional>" }
+{ "event": "<event-type>", "payload": { ... } }
 ```
 
 Event types:
-- Client → Server: `message:send`, `message:read`, `typing:start`, `typing:stop`, `presence:update`
-- Server → Client: `message:new`, `message:delivered`, `message:read`, `typing:update`, `presence:update`, `session:conflict`
+- Client → Server: `message:send`
+- Server → Client: `message:new`
 
-`client_message_id` serves as an idempotency key for sent messages; the server echoes it back in `message:new` for local correlation.
+`client_message_id` is set by the client on `message:send` and echoed back in `message:new` for local message correlation.
 
 ### Key Design Decisions
 
 - All IDs are UUIDs.
-- Pagination on message history uses a `before` (ISO 8601 timestamp) cursor with a `has_more` flag, not page numbers.
-- `session:conflict` is fired server-side when a second device authenticates with the same account — clients should handle this gracefully.
-- Media files are always stored encrypted; the server never sees plaintext content.
+- Pagination uses a `before` (ISO 8601 timestamp) cursor with a `has_more` flag, not page numbers.
+- Messages are stored and transmitted as plain text.
